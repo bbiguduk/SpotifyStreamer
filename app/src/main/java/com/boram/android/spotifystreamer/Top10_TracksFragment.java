@@ -117,6 +117,8 @@ public class Top10_TracksFragment extends Fragment {
                 Tracks tracksResult = spotify.getArtistTopTrack(strings[0], query);
                 trackList = tracksResult.tracks;
             } catch(RetrofitError ex) {
+                Toast.makeText(getActivity(), getResources().getString(R.string.connection_error),
+                        Toast.LENGTH_SHORT).show();
                 ex.printStackTrace();
                 return null;
             }
