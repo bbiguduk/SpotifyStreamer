@@ -11,7 +11,8 @@
         android:theme="@style/AppTheme" >
         <activity
             android:name=".SpotifyStreamer"
-            android:label="@string/app_name" >
+            android:label="@string/app_name"
+            android:configChanges="orientation|screenSize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
@@ -21,7 +22,8 @@
         <activity
             android:name=".Top10_Tracks"
             android:label="@string/title_activity_top10__tracks"
-            android:parentActivityName=".SpotifyStreamer" >
+            android:parentActivityName=".SpotifyStreamer"
+            android:configChanges="orientation|screenSize">
             <meta-data
                 android:name="android.support.PARENT_ACTIVITY"
                 android:value="com.boram.android.spotifystreamer.SpotifyStreamer" />

@@ -1,10 +1,13 @@
 package com.boram.android.spotifystreamer;
 
+import android.app.Dialog;
+import android.app.ProgressDialog;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.support.v4.app.Fragment;
 import android.os.Bundle;
+import android.support.v7.widget.SearchView;
 import android.util.Log;
 import android.view.KeyEvent;
 import android.view.LayoutInflater;
@@ -15,6 +18,7 @@ import android.widget.AdapterView;
 import android.widget.EditText;
 import android.widget.ListView;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -34,6 +38,7 @@ import kaaes.spotify.webapi.android.SpotifyService;
 import kaaes.spotify.webapi.android.models.Artist;
 import kaaes.spotify.webapi.android.models.ArtistsPager;
 import kaaes.spotify.webapi.android.models.Pager;
+import retrofit.RetrofitError;
 
 
 /**
@@ -43,6 +48,7 @@ public class SpotifyStreamerFragment extends Fragment {
     private final String LOG_TAG = SpotifyStreamer.class.getSimpleName();
 
     public ListView artistList;
+    public SearchView searchArea;
     public ArtistAdapter artistAdapter;
 
     public SpotifyStreamerFragment() {
@@ -58,30 +64,36 @@ public class SpotifyStreamerFragment extends Fragment {
                 new ArtistAdapter(
                         getActivity(),
                         R.layout.artist_list_item,
-                        new ArrayList<ArtistsData>());
+//                        new ArrayList<ArtistsData>());
+                        new ArrayList<Artist>());
         artistList.setAdapter(artistAdapter);
         artistList.setOnItemClickListener(new AdapterView.OnItemClickListener() {
             @Override
             public void onItemClick(AdapterView<?> adapterView, View view, int i, long l) {
-                ArtistsData artistsData = artistAdapter.getItem(i);
+//                ArtistsData artistsData = artistAdapter.getItem(i);
+                Artist artistsData = artistAdapter.getItem(i);
                 Intent intent = new Intent(getActivity(), Top10_Tracks.class)
-                        .putExtra(Intent.EXTRA_TEXT, artistsData.getName());
+//                        .putExtra(Intent.EXTRA_TEXT, artistsData.getName());
+                        .putExtra(Intent.EXTRA_TEXT, artistsData.name);
                 startActivity(intent);
             }
         });
 
-        EditText searchArea = (EditText)rootView.findViewById(R.id.search_area);
-        searchArea.setOnEditorActionListener(new TextView.OnEditorActionListener() {
+        searchArea = (SearchView)rootView.findViewById(R.id.search_area);
+        searchArea.setIconifiedByDefault(false);
+        searchArea.setQueryHint(getResources().getString(R.string.artist_search_hint));
+        searchArea.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
+
             @Override
-            public boolean onEditorAction(TextView textView, int i, KeyEvent keyEvent) {
-                if(i == EditorInfo.IME_ACTION_SEARCH) {
-                    Log.d(LOG_TAG, "Artist : " + textView.getText().toString());
-                    FetchArtistTask fetchArtistTask = new FetchArtistTask();
-                    fetchArtistTask.execute(textView.getText().toString());
+            public boolean onQueryTextSubmit(String query) {
+                String searchKeyword = searchArea.getQuery().toString();
+                FetchArtistTask fetchArtistTask = new FetchArtistTask();
+                fetchArtistTask.execute(searchKeyword);
+                return false;
+            }
 
-                    return true;
-                }
-
+            @Override
+            public boolean onQueryTextChange(String newText) {
                 return false;
             }
         });
@@ -89,8 +101,25 @@ public class SpotifyStreamerFragment extends Fragment {
         return rootView;
     }
 
-    public class FetchArtistTask extends AsyncTask<String, Void, ArrayList<ArtistsData>> {
+//    public class FetchArtistTask extends AsyncTask<String, Void, ArrayList<ArtistsData>> {
+    public class FetchArtistTask extends AsyncTask<String, Void, List<Artist>> {
         private final String LOG_TAG = FetchArtistTask.class.getSimpleName();
+
+        private ProgressDialog mDialog;
+
+        @Override
+        protected void onPreExecute() {
+            mDialog = new ProgressDialog(getActivity());
+            mDialog.setProgressStyle(ProgressDialog.STYLE_SPINNER);
+            mDialog.setMessage(getResources().getString(R.string.loading));
+            mDialog.show();
+            super.onPreExecute();
+        }
+
+        @Override
+        protected void onProgressUpdate(Void... values) {
+            super.onProgressUpdate(values);
+         }
 
         private ArrayList<ArtistsData> getArtistDataFromJson(String artistJsonStr)
                 throws JSONException {
@@ -126,90 +155,113 @@ public class SpotifyStreamerFragment extends Fragment {
         }
 
         @Override
-        protected ArrayList<ArtistsData> doInBackground(String... strings) {
+//        protected ArrayList<ArtistsData> doInBackground(String... strings) {
+        protected List<Artist> doInBackground(String... strings) {
             if(strings.length == 0) {
                 return null;
             }
 
-            HttpURLConnection urlConnection = null;
-            BufferedReader reader = null;
+            SpotifyApi api = new SpotifyApi();
+            SpotifyService spotify = api.getService();
 
-            String artistJsonStr = null;
-
-            String type = "artist";
+            List<Artist> artistList = new ArrayList<Artist>();
 
             try {
-                final String SPOTIFY_ARTIST_URL =
-                        "https://api.spotify.com/v1/search?";
-                final String QUERY_PARAM = "q";
-                final String TYPE_PARAM = "type";
-
-                Uri builtUri = Uri.parse(SPOTIFY_ARTIST_URL).buildUpon()
-                        .appendQueryParameter(QUERY_PARAM, strings[0])
-                        .appendQueryParameter(TYPE_PARAM, type)
-                        .build();
-
-                URL url = new URL(builtUri.toString());
-
-                Log.v(LOG_TAG, "Built URI " + builtUri.toString());
-
-                urlConnection = (HttpURLConnection)url.openConnection();
-                urlConnection.setRequestMethod("GET");
-                urlConnection.connect();
-
-                InputStream inputStream = urlConnection.getInputStream();
-                StringBuffer buffer = new StringBuffer();
-                if(inputStream == null) {
-                    return null;
-                }
-                reader = new BufferedReader(new InputStreamReader(inputStream));
-
-                String line;
-                while((line = reader.readLine()) != null) {
-                    buffer.append(line + "\n");
-                }
-
-                if(buffer.length() == 0) {
-                    return null;
-                }
-                artistJsonStr = buffer.toString();
-
-                Log.v(LOG_TAG, "Artist JSON String : " + artistJsonStr);
-            } catch(IOException e) {
-                Log.e(LOG_TAG, "Error " + e);
-                return null;
-            } finally {
-                if(urlConnection != null) {
-                    urlConnection.disconnect();
-                }
-                if(reader != null) {
-                    try {
-                        reader.close();
-                    } catch(final IOException e) {
-                        Log.e(LOG_TAG, "Error closing stream", e);
-                    }
-                }
+                ArtistsPager searchResults = spotify.searchArtists(strings[0]);
+                Pager<Artist> artists = searchResults.artists;
+                artistList = artists.items;
+            } catch(RetrofitError ex) {
+                Toast.makeText(getActivity(), getResources().getString(R.string.connection_error),
+                        Toast.LENGTH_SHORT).show();
+                ex.printStackTrace();
             }
 
-            try {
-                return getArtistDataFromJson(artistJsonStr);
-            } catch (JSONException e) {
-                Log.e(LOG_TAG, e.getMessage(), e);
-                e.printStackTrace();
-            }
+            return artistList;
 
-            return null;
+//            HttpURLConnection urlConnection = null;
+//            BufferedReader reader = null;
+//
+//            String artistJsonStr = null;
+//
+//            String type = "artist";
+//
+//            try {
+//                final String SPOTIFY_ARTIST_URL =
+//                        "https://api.spotify.com/v1/search?";
+//                final String QUERY_PARAM = "q";
+//                final String TYPE_PARAM = "type";
+//
+//                Uri builtUri = Uri.parse(SPOTIFY_ARTIST_URL).buildUpon()
+//                        .appendQueryParameter(QUERY_PARAM, strings[0])
+//                        .appendQueryParameter(TYPE_PARAM, type)
+//                        .build();
+//
+//                URL url = new URL(builtUri.toString());
+//
+//                Log.v(LOG_TAG, "Built URI " + builtUri.toString());
+//
+//                urlConnection = (HttpURLConnection)url.openConnection();
+//                urlConnection.setRequestMethod("GET");
+//                urlConnection.connect();
+//
+//                InputStream inputStream = urlConnection.getInputStream();
+//                StringBuffer buffer = new StringBuffer();
+//                if(inputStream == null) {
+//                    return null;
+//                }
+//                reader = new BufferedReader(new InputStreamReader(inputStream));
+//
+//                String line;
+//                while((line = reader.readLine()) != null) {
+//                    buffer.append(line + "\n");
+//                }
+//
+//                if(buffer.length() == 0) {
+//                    return null;
+//                }
+//                artistJsonStr = buffer.toString();
+//
+//                Log.v(LOG_TAG, "Artist JSON String : " + artistJsonStr);
+//            } catch(IOException e) {
+//                Log.e(LOG_TAG, "Error " + e);
+//                return null;
+//            } finally {
+//                if(urlConnection != null) {
+//                    urlConnection.disconnect();
+//                }
+//                if(reader != null) {
+//                    try {
+//                        reader.close();
+//                    } catch(final IOException e) {
+//                        Log.e(LOG_TAG, "Error closing stream", e);
+//                    }
+//                }
+//            }
+//
+//            try {
+//                return getArtistDataFromJson(artistJsonStr);
+//            } catch (JSONException e) {
+//                Log.e(LOG_TAG, e.getMessage(), e);
+//                e.printStackTrace();
+//            }
+//
+//            return null;
         }
 
         @Override
-        protected void onPostExecute(ArrayList<ArtistsData> artistsDatas) {
+        protected void onPostExecute(List<Artist> artistsDatas) {
+            mDialog.dismiss();
+
             if(artistsDatas != null) {
                 if(artistAdapter != null) {
                     artistAdapter.clear();
                 }
-                for(ArtistsData artistsData : artistsDatas) {
+                for(Artist artistsData : artistsDatas) {
                     artistAdapter.add(artistsData);
                 }
+            } else {
+                Toast.makeText(getActivity(), getResources().getString(R.string.no_search_artist),
+                        Toast.LENGTH_SHORT).show();
             }
         }
     }

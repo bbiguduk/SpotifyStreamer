@@ -5,4 +5,10 @@
 
     <string name="empty_list">Search for Artist!</string>
     <string name="title_activity_top10__tracks">Top 10 Tracks</string>
+
+    <string name="artist_search_hint">ColdPlay</string>
+
+    <string name="connection_error">Don\'t connect Internet.</string>
+    <string name="no_search_artist">We don\'t search for artist.\nPlease search again.</string>
+    <string name="loading">Loading...</string>
 </resources>

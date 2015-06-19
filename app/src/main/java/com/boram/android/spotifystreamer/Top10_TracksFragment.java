@@ -2,6 +2,7 @@ package com.boram.android.spotifystreamer;
 
 import android.annotation.TargetApi;
 import android.app.ActionBar;
+import android.app.ProgressDialog;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.AsyncTask;
@@ -73,6 +74,17 @@ public class Top10_TracksFragment extends Fragment {
 
     public class FetchTop10TracksTask extends AsyncTask<String, Void, ArrayList<AlbumData>> {
         private final String LOG_TAG = FetchTop10TracksTask.class.getSimpleName();
+
+        private ProgressDialog mDialog;
+
+        @Override
+        protected void onPreExecute() {
+            mDialog = new ProgressDialog(getActivity());
+            mDialog.setProgressStyle(ProgressDialog.STYLE_SPINNER);
+            mDialog.setMessage(getResources().getString(R.string.loading));
+            mDialog.show();
+            super.onPreExecute();
+        }
 
         private ArrayList<AlbumData> getAlbumDataFromJson(String albumJsonStr)
                 throws JSONException {
@@ -192,6 +204,8 @@ public class Top10_TracksFragment extends Fragment {
 
         @Override
         protected void onPostExecute(ArrayList<AlbumData> albumDatas) {
+            mDialog.dismiss();
+
             if(albumDatas != null) {
                 mAlbumAdapter.clear();
                 for(AlbumData albumData : albumDatas) {
