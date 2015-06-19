@@ -20,7 +20,6 @@ import kaaes.spotify.webapi.android.models.Image;
 /**
  * Created by Boram on 2015-06-17.
  */
-//public class ArtistAdapter extends ArrayAdapter<ArtistsData> {
 public class ArtistAdapter extends ArrayAdapter<Artist> {
     private final String LOG_TAG = ArtistAdapter.class.getSimpleName();
 
@@ -44,8 +43,6 @@ public class ArtistAdapter extends ArrayAdapter<Artist> {
         if(artistsData != null) {
             ImageView artistImg = (ImageView)convertView.findViewById(R.id.artist_img);
             TextView artistName = (TextView)convertView.findViewById(R.id.artist_name);
-//            Log.d(LOG_TAG, "POSITION : " + position);
-//            Log.d(LOG_TAG, "IMAGE URL : " + artistsData.getImgUrl() +":");
 
             List<Image> imagesList;
             if(!artistsData.images.isEmpty()) {
@@ -53,11 +50,6 @@ public class ArtistAdapter extends ArrayAdapter<Artist> {
                 Picasso.with(context).load(imagesList.get(0).url).into(artistImg);
             }
             artistName.setText(artistsData.name);
-
-//            if(!(artistsData.getImgUrl().equals(""))) {
-//                Picasso.with(context).load(artistsData.getImgUrl()).into(artistImg);
-//            }
-//            artistName.setText(artistsData.getName());
         }
 
         return convertView;

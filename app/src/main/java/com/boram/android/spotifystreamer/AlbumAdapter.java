@@ -11,17 +11,21 @@ import android.widget.TextView;
 import com.squareup.picasso.Picasso;
 
 import java.util.ArrayList;
+import java.util.List;
+
+import kaaes.spotify.webapi.android.models.Image;
+import kaaes.spotify.webapi.android.models.Track;
 
 /**
  * Created by Boram on 2015-06-18.
  */
-public class AlbumAdapter extends ArrayAdapter<AlbumData> {
+public class AlbumAdapter extends ArrayAdapter<Track> {
     private final String LOG_TAG = AlbumAdapter.class.getSimpleName();
 
     private Context context;
-    private ArrayList<AlbumData> items;
+    private ArrayList<Track> items;
 
-    public AlbumAdapter(Context context, int listItemLayoutId, ArrayList<AlbumData> items) {
+    public AlbumAdapter(Context context, int listItemLayoutId, ArrayList<Track> items) {
         super(context, listItemLayoutId, items);
         this.context = context;
         this.items = items;
@@ -34,17 +38,18 @@ public class AlbumAdapter extends ArrayAdapter<AlbumData> {
             convertView = inflater.inflate(R.layout.top10_tracks_list_item, parent, false);
         }
 
-        AlbumData albumData = items.get(position);
+        Track albumData = items.get(position);
         if(albumData != null) {
             ImageView albumImg = (ImageView)convertView.findViewById(R.id.album_img);
             TextView albumName = (TextView)convertView.findViewById(R.id.album_name);
             TextView trackName = (TextView)convertView.findViewById(R.id.album_track);
 
-            if(!(albumImg.equals(""))) {
-                Picasso.with(context).load(albumData.getAlbumImgUrl()).into(albumImg);
+            List<Image> imageList = albumData.album.images;
+            if(!(imageList.isEmpty())) {
+                Picasso.with(context).load(imageList.get(0).url).into(albumImg);
             }
-            albumName.setText(albumData.getAlbumName());
-            trackName.setText(albumData.getTrackName());
+            albumName.setText(albumData.album.name);
+            trackName.setText(albumData.name);
         }
 
         return convertView;

@@ -3,7 +3,10 @@ package com.boram.android.spotifystreamer;
 import android.annotation.TargetApi;
 import android.app.ActionBar;
 import android.app.ProgressDialog;
+import android.content.Context;
 import android.content.Intent;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Build;
@@ -15,6 +18,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
 import android.widget.ListView;
+import android.widget.Toast;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -27,6 +31,15 @@ import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import kaaes.spotify.webapi.android.SpotifyApi;
+import kaaes.spotify.webapi.android.SpotifyService;
+import kaaes.spotify.webapi.android.models.Track;
+import kaaes.spotify.webapi.android.models.Tracks;
+import retrofit.RetrofitError;
 
 
 /**
@@ -43,8 +56,9 @@ public class Top10_TracksFragment extends Fragment {
     }
 
     private void updateTop10Tracks() {
+        Log.v(LOG_TAG, "Artist : " + intent.getStringExtra(SpotifyStreamerConst.ARTIST_NAME));
         FetchTop10TracksTask fetchTop10TracksTask = new FetchTop10TracksTask();
-        fetchTop10TracksTask.execute(intent.getStringExtra(Intent.EXTRA_TEXT));
+        fetchTop10TracksTask.execute(intent.getStringExtra(SpotifyStreamerConst.ARTIST_ID));
     }
 
     @Override
@@ -59,20 +73,20 @@ public class Top10_TracksFragment extends Fragment {
         intent = getActivity().getIntent();
 
         View rootView = inflater.inflate(R.layout.fragment_top10_tracks, container, false);
-        if(intent != null && intent.hasExtra(Intent.EXTRA_TEXT)) {
+        if(intent != null && intent.hasExtra(SpotifyStreamerConst.ARTIST_ID)) {
             ListView top10TracksList = (ListView)rootView.findViewById(R.id.top10_tracks_list);
             mAlbumAdapter =
                     new AlbumAdapter(
                             getActivity(),
                             R.layout.top10_tracks_list_item,
-                            new ArrayList<AlbumData>());
+                            new ArrayList<Track>());
             top10TracksList.setAdapter(mAlbumAdapter);
         }
 
         return rootView;
     }
 
-    public class FetchTop10TracksTask extends AsyncTask<String, Void, ArrayList<AlbumData>> {
+    public class FetchTop10TracksTask extends AsyncTask<String, Void, List<Track>> {
         private final String LOG_TAG = FetchTop10TracksTask.class.getSimpleName();
 
         private ProgressDialog mDialog;
@@ -86,131 +100,41 @@ public class Top10_TracksFragment extends Fragment {
             super.onPreExecute();
         }
 
-        private ArrayList<AlbumData> getAlbumDataFromJson(String albumJsonStr)
-                throws JSONException {
-            final String OWM_TRACKS = "tracks";
-            final String OWM_ITEMS = "items";
-            final String OWM_ALBUM = "album";
-            final String OWM_ARTISTS = "artists";
-            final String OWM_IMAGES = "images";
-            final String OWM_URL = "url";
-            final String OWM_NAME = "name";
-
-            JSONObject top10TrackJson = new JSONObject(albumJsonStr);
-            JSONObject tracksJsonObject = top10TrackJson.getJSONObject(OWM_TRACKS);
-            JSONArray itemsJSONArray = tracksJsonObject.getJSONArray(OWM_ITEMS);
-
-            ArrayList<AlbumData> resultArrayList = new ArrayList<AlbumData>();
-            for(int i = 0; i < itemsJSONArray.length(); i++) {
-                String albumImgUrl = "";
-                String albumName;
-                String trackName;
-
-                JSONObject itemsJSONObject = itemsJSONArray.getJSONObject(i);
-                JSONObject albumJSONObject = itemsJSONObject.getJSONObject(OWM_ALBUM);
-
-                albumName = albumJSONObject.getString(OWM_NAME);
-
-                JSONArray imagesJSONArray = albumJSONObject.getJSONArray(OWM_IMAGES);
-                if(imagesJSONArray.length() > 0) {
-                    JSONObject imagesJSONObject = imagesJSONArray.getJSONObject(0);
-                    albumImgUrl = imagesJSONObject.getString(OWM_URL);
-                }
-
-                trackName = itemsJSONObject.getString(OWM_NAME);
-
-                resultArrayList.add(new AlbumData(albumImgUrl, albumName, trackName));
-            }
-
-            return resultArrayList;
-        }
-
         @Override
-        protected ArrayList<AlbumData> doInBackground(String... strings) {
+        protected List<Track> doInBackground(String... strings) {
             if(strings.length == 0) {
                 return null;
             }
 
-            HttpURLConnection urlConnection = null;
-            BufferedReader reader = null;
+            List<Track> trackList;
 
-            String albumJsonStr = null;
+            SpotifyApi api = new SpotifyApi();
+            SpotifyService spotify = api.getService();
 
-            String type = "track";
-            int limit = 10;
-
+            Map<String, Object> query = new HashMap<String, Object>();
+            query.put("country", "US");
             try {
-                final String ALBUM_BASE_URL =
-                        "https://api.spotify.com/v1/search?";
-                final String QUERY_PARAM = "q";
-                final String TYPE_PARAM = "type";
-                final String LIMIT_PARAM = "limit";
-
-                Uri builtUri = Uri.parse(ALBUM_BASE_URL).buildUpon()
-                        .appendQueryParameter(QUERY_PARAM, strings[0])
-                        .appendQueryParameter(TYPE_PARAM, type)
-                        .appendQueryParameter(LIMIT_PARAM, Integer.toString(limit))
-                        .build();
-
-                URL url = new URL(builtUri.toString());
-
-                urlConnection = (HttpURLConnection)url.openConnection();
-                urlConnection.setRequestMethod("GET");
-                urlConnection.connect();
-
-                InputStream inputStream = urlConnection.getInputStream();
-                StringBuffer buffer = new StringBuffer();
-                if(inputStream == null) {
-                    return null;
-                }
-                reader = new BufferedReader(new InputStreamReader(inputStream));
-
-                String line;
-                while((line = reader.readLine()) != null) {
-                    buffer.append(line + "\n");
-                }
-
-                if(buffer.length() == 0) {
-                    return null;
-                }
-                albumJsonStr = buffer.toString();
-
-                Log.v(LOG_TAG, "ALBUM JSON String: " + albumJsonStr);
-            } catch(IOException e) {
-                Log.e(LOG_TAG, "Error ", e);
+                Tracks tracksResult = spotify.getArtistTopTrack(strings[0], query);
+                trackList = tracksResult.tracks;
+            } catch(RetrofitError ex) {
+                ex.printStackTrace();
                 return null;
-            } finally {
-                if(urlConnection != null) {
-                    urlConnection.disconnect();
-                }
-                if(reader != null) {
-                    try {
-                        reader.close();
-                    } catch(final IOException e) {
-                        Log.e(LOG_TAG, "Error closing stream", e);
-                    }
-                }
             }
-
-            try {
-                return getAlbumDataFromJson(albumJsonStr);
-            } catch(JSONException e) {
-                Log.e(LOG_TAG, e.getMessage(), e);
-                e.printStackTrace();
-            }
-
-            return null;
+            return trackList;
         }
 
         @Override
-        protected void onPostExecute(ArrayList<AlbumData> albumDatas) {
+        protected void onPostExecute(List<Track> albumDatas) {
             mDialog.dismiss();
 
             if(albumDatas != null) {
                 mAlbumAdapter.clear();
-                for(AlbumData albumData : albumDatas) {
+                for(Track albumData : albumDatas) {
                     mAlbumAdapter.add(albumData);
                 }
+            } else {
+                Toast.makeText(getActivity(), getResources().getString(R.string.no_search_track),
+                        Toast.LENGTH_SHORT).show();
             }
         }
     }

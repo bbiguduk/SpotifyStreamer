@@ -2,7 +2,10 @@ package com.boram.android.spotifystreamer;
 
 import android.app.Dialog;
 import android.app.ProgressDialog;
+import android.content.Context;
 import android.content.Intent;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.support.v4.app.Fragment;
@@ -74,7 +77,8 @@ public class SpotifyStreamerFragment extends Fragment {
                 Artist artistsData = artistAdapter.getItem(i);
                 Intent intent = new Intent(getActivity(), Top10_Tracks.class)
 //                        .putExtra(Intent.EXTRA_TEXT, artistsData.getName());
-                        .putExtra(Intent.EXTRA_TEXT, artistsData.name);
+                        .putExtra(SpotifyStreamerConst.ARTIST_NAME, artistsData.name)
+                        .putExtra(SpotifyStreamerConst.ARTIST_ID, artistsData.id);
                 startActivity(intent);
             }
         });
@@ -87,8 +91,13 @@ public class SpotifyStreamerFragment extends Fragment {
             @Override
             public boolean onQueryTextSubmit(String query) {
                 String searchKeyword = searchArea.getQuery().toString();
-                FetchArtistTask fetchArtistTask = new FetchArtistTask();
-                fetchArtistTask.execute(searchKeyword);
+
+                if(isNetworkAvailable()) {
+                    FetchArtistTask fetchArtistTask = new FetchArtistTask();
+                    fetchArtistTask.execute(searchKeyword);
+                } else {
+                    Toast.makeText(getActivity(), getString(R.string.connection_error), Toast.LENGTH_SHORT).show();
+                }
                 return false;
             }
 
@@ -101,7 +110,13 @@ public class SpotifyStreamerFragment extends Fragment {
         return rootView;
     }
 
-//    public class FetchArtistTask extends AsyncTask<String, Void, ArrayList<ArtistsData>> {
+    private boolean isNetworkAvailable() {
+        ConnectivityManager connectivityManager =
+                (ConnectivityManager)getActivity().getSystemService(Context.CONNECTIVITY_SERVICE);
+        NetworkInfo activeNetworkInfo = connectivityManager.getActiveNetworkInfo();
+        return activeNetworkInfo != null && activeNetworkInfo.isConnected();
+    }
+
     public class FetchArtistTask extends AsyncTask<String, Void, List<Artist>> {
         private final String LOG_TAG = FetchArtistTask.class.getSimpleName();
 
@@ -117,45 +132,6 @@ public class SpotifyStreamerFragment extends Fragment {
         }
 
         @Override
-        protected void onProgressUpdate(Void... values) {
-            super.onProgressUpdate(values);
-         }
-
-        private ArrayList<ArtistsData> getArtistDataFromJson(String artistJsonStr)
-                throws JSONException {
-            final String OWM_ARTISTS = "artists";
-            final String OWM_ITEMS = "items";
-            final String OWM_IMAGES = "images";
-            final String OWM_URL = "url";
-            final String OWM_NAME = "name";
-
-            JSONObject artistsDataJson = new JSONObject(artistJsonStr);
-            JSONObject artistsJson = artistsDataJson.getJSONObject(OWM_ARTISTS);
-            JSONArray itemsArray = artistsJson.getJSONArray(OWM_ITEMS);
-
-            ArrayList<ArtistsData> resultArrayList = new ArrayList<ArtistsData>();
-            for(int i = 0; i < itemsArray.length(); i++) {
-                String img_url = "";
-                String name;
-
-                JSONObject itemsObject = itemsArray.getJSONObject(i);
-
-                JSONArray imagesArray = itemsObject.getJSONArray(OWM_IMAGES);
-                Log.v(LOG_TAG, "IMAGES ARRAY : " + imagesArray.length());
-                if(imagesArray.length() > 0) {
-                    JSONObject imagesObject = imagesArray.optJSONObject(0);
-                    img_url = imagesObject.optString(OWM_URL);
-                }
-                name = itemsObject.getString(OWM_NAME);
-
-                resultArrayList.add(new ArtistsData(img_url, name));
-            }
-
-            return resultArrayList;
-        }
-
-        @Override
-//        protected ArrayList<ArtistsData> doInBackground(String... strings) {
         protected List<Artist> doInBackground(String... strings) {
             if(strings.length == 0) {
                 return null;
@@ -177,75 +153,6 @@ public class SpotifyStreamerFragment extends Fragment {
             }
 
             return artistList;
-
-//            HttpURLConnection urlConnection = null;
-//            BufferedReader reader = null;
-//
-//            String artistJsonStr = null;
-//
-//            String type = "artist";
-//
-//            try {
-//                final String SPOTIFY_ARTIST_URL =
-//                        "https://api.spotify.com/v1/search?";
-//                final String QUERY_PARAM = "q";
-//                final String TYPE_PARAM = "type";
-//
-//                Uri builtUri = Uri.parse(SPOTIFY_ARTIST_URL).buildUpon()
-//                        .appendQueryParameter(QUERY_PARAM, strings[0])
-//                        .appendQueryParameter(TYPE_PARAM, type)
-//                        .build();
-//
-//                URL url = new URL(builtUri.toString());
-//
-//                Log.v(LOG_TAG, "Built URI " + builtUri.toString());
-//
-//                urlConnection = (HttpURLConnection)url.openConnection();
-//                urlConnection.setRequestMethod("GET");
-//                urlConnection.connect();
-//
-//                InputStream inputStream = urlConnection.getInputStream();
-//                StringBuffer buffer = new StringBuffer();
-//                if(inputStream == null) {
-//                    return null;
-//                }
-//                reader = new BufferedReader(new InputStreamReader(inputStream));
-//
-//                String line;
-//                while((line = reader.readLine()) != null) {
-//                    buffer.append(line + "\n");
-//                }
-//
-//                if(buffer.length() == 0) {
-//                    return null;
-//                }
-//                artistJsonStr = buffer.toString();
-//
-//                Log.v(LOG_TAG, "Artist JSON String : " + artistJsonStr);
-//            } catch(IOException e) {
-//                Log.e(LOG_TAG, "Error " + e);
-//                return null;
-//            } finally {
-//                if(urlConnection != null) {
-//                    urlConnection.disconnect();
-//                }
-//                if(reader != null) {
-//                    try {
-//                        reader.close();
-//                    } catch(final IOException e) {
-//                        Log.e(LOG_TAG, "Error closing stream", e);
-//                    }
-//                }
-//            }
-//
-//            try {
-//                return getArtistDataFromJson(artistJsonStr);
-//            } catch (JSONException e) {
-//                Log.e(LOG_TAG, e.getMessage(), e);
-//                e.printStackTrace();
-//            }
-//
-//            return null;
         }
 
         @Override
