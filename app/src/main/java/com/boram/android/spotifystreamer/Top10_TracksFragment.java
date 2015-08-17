@@ -16,6 +16,7 @@ import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.ListView;
 import android.widget.Toast;
@@ -51,29 +52,36 @@ public class Top10_TracksFragment extends Fragment {
     private Intent intent;
     public AlbumAdapter mAlbumAdapter;
 
+    private String artistId;
+    private String artistName;
+
+    public interface Callback {
+//        public void onItemSelected(Track data);
+        public void onItemSelected(int position, AlbumAdapter trackData);
+    }
+
     public Top10_TracksFragment() {
 
     }
 
     private void updateTop10Tracks() {
-        Log.v(LOG_TAG, "Artist : " + intent.getStringExtra(SpotifyStreamerConst.ARTIST_NAME));
+        Log.v(LOG_TAG, "Artist : " + artistName);
         FetchTop10TracksTask fetchTop10TracksTask = new FetchTop10TracksTask();
-        fetchTop10TracksTask.execute(intent.getStringExtra(SpotifyStreamerConst.ARTIST_ID));
-    }
-
-    @Override
-    public void onStart() {
-        super.onStart();
-        updateTop10Tracks();
+        fetchTop10TracksTask.execute(artistId);
     }
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
-        intent = getActivity().getIntent();
-
         View rootView = inflater.inflate(R.layout.fragment_top10_tracks, container, false);
-        if(intent != null && intent.hasExtra(SpotifyStreamerConst.ARTIST_ID)) {
+
+        Bundle arguments = getArguments();
+        if(arguments != null) {
+            artistId = arguments.getString(SpotifyStreamerConst.ARTIST_ID);
+            artistName = arguments.getString(SpotifyStreamerConst.ARTIST_NAME);
+
+            updateTop10Tracks();
+
             ListView top10TracksList = (ListView)rootView.findViewById(R.id.top10_tracks_list);
             mAlbumAdapter =
                     new AlbumAdapter(
@@ -81,6 +89,20 @@ public class Top10_TracksFragment extends Fragment {
                             R.layout.top10_tracks_list_item,
                             new ArrayList<Track>());
             top10TracksList.setAdapter(mAlbumAdapter);
+            top10TracksList.setOnItemClickListener(new AdapterView.OnItemClickListener() {
+                @Override
+                public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
+                    Track track = mAlbumAdapter.getItem(position);
+//                    Log.d(LOG_TAG, "Artist Name : " + artistName);
+//                    Log.d(LOG_TAG, "Album Name : " + track.album.name);
+//                    Log.d(LOG_TAG, "Album Image : " + track.album.images.get(0).url);
+//                    Log.d(LOG_TAG, "Track Name : " + track.name);
+//                    Log.d(LOG_TAG, "Track Duration : " + track.duration_ms);
+
+                    ((Callback)getActivity())
+                            .onItemSelected(position, mAlbumAdapter);
+                }
+            });
         }
 
         return rootView;

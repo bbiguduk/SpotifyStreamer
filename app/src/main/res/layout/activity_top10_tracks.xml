@@ -1,5 +1,7 @@
-<fragment xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools" android:id="@+id/fragment"
-    android:name="com.boram.android.spotifystreamer.Top10_TracksFragment"
-    tools:layout="@layout/fragment_top10_tracks" android:layout_width="match_parent"
-    android:layout_height="match_parent" />
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/top10_tracks_container"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context="com.boram.android.spotifystreamer.Top10_Tracks"
+    tools:ignore="MergeRootFrame"/>

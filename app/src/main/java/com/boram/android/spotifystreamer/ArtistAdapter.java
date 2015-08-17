@@ -26,6 +26,16 @@ public class ArtistAdapter extends ArrayAdapter<Artist> {
     private Context context;
     private ArrayList<Artist> items;
 
+    public static class ArtistViewHolder {
+        public final ImageView artistImgView;
+        public final TextView artistNameView;
+
+        public ArtistViewHolder(View view) {
+            artistImgView = (ImageView)view.findViewById(R.id.artist_img);
+            artistNameView = (TextView)view.findViewById(R.id.artist_name);
+        }
+    }
+
     public ArtistAdapter(Context context, int listItemLayout, ArrayList<Artist> items) {
         super(context, listItemLayout, items);
         this.context = context;
@@ -34,22 +44,26 @@ public class ArtistAdapter extends ArrayAdapter<Artist> {
 
     @Override
     public View getView(int position, View convertView, ViewGroup parent) {
+        ArtistViewHolder holder;
+
         if(convertView == null) {
             LayoutInflater inflater = (LayoutInflater)context.getSystemService(Context.LAYOUT_INFLATER_SERVICE);
             convertView = inflater.inflate(R.layout.artist_list_item, parent, false);
+
+            holder = new ArtistViewHolder(convertView);
+            convertView.setTag(holder);
+        } else {
+            holder = (ArtistViewHolder)convertView.getTag();
         }
 
         Artist artistsData = items.get(position);
         if(artistsData != null) {
-            ImageView artistImg = (ImageView)convertView.findViewById(R.id.artist_img);
-            TextView artistName = (TextView)convertView.findViewById(R.id.artist_name);
-
             List<Image> imagesList;
             if(!artistsData.images.isEmpty()) {
                 imagesList = artistsData.images;
-                Picasso.with(context).load(imagesList.get(0).url).into(artistImg);
+                Picasso.with(context).load(imagesList.get(0).url).into(holder.artistImgView);
             }
-            artistName.setText(artistsData.name);
+            holder.artistNameView.setText(artistsData.name);
         }
 
         return convertView;

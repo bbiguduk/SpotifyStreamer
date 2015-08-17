@@ -9,6 +9,7 @@ import android.os.AsyncTask;
 import android.support.v4.app.Fragment;
 import android.os.Bundle;
 import android.support.v7.widget.SearchView;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -37,6 +38,14 @@ public class SpotifyStreamerFragment extends Fragment {
     public SearchView searchArea;
     public ArtistAdapter artistAdapter;
 
+    private int mPosition = ListView.INVALID_POSITION;
+    private static final String SELECTED_KEY = "selected_position";
+
+    public interface Callback {
+        public void onItemSelected(Artist data);
+        public void onSearchClicked(String searchKeyword);
+    }
+
     public SpotifyStreamerFragment() {
     }
 
@@ -58,11 +67,10 @@ public class SpotifyStreamerFragment extends Fragment {
             public void onItemClick(AdapterView<?> adapterView, View view, int i, long l) {
 //                ArtistsData artistsData = artistAdapter.getItem(i);
                 Artist artistsData = artistAdapter.getItem(i);
-                Intent intent = new Intent(getActivity(), Top10_Tracks.class)
-//                        .putExtra(Intent.EXTRA_TEXT, artistsData.getName());
-                        .putExtra(SpotifyStreamerConst.ARTIST_NAME, artistsData.name)
-                        .putExtra(SpotifyStreamerConst.ARTIST_ID, artistsData.id);
-                startActivity(intent);
+                ((Callback)getActivity())
+                        .onItemSelected(artistsData);
+
+                mPosition = i;
             }
         });
 
@@ -76,6 +84,8 @@ public class SpotifyStreamerFragment extends Fragment {
                 String searchKeyword = searchArea.getQuery().toString();
 
                 if(isNetworkAvailable()) {
+                    ((Callback)getActivity())
+                            .onSearchClicked(searchKeyword);
                     FetchArtistTask fetchArtistTask = new FetchArtistTask();
                     fetchArtistTask.execute(searchKeyword);
                 } else {
@@ -90,7 +100,20 @@ public class SpotifyStreamerFragment extends Fragment {
             }
         });
 
+        if(savedInstanceState != null && savedInstanceState.containsKey(SELECTED_KEY)) {
+            mPosition = savedInstanceState.getInt(SELECTED_KEY);
+        }
+
         return rootView;
+    }
+
+    @Override
+    public void onSaveInstanceState(Bundle outState) {
+        if(mPosition != ListView.INVALID_POSITION) {
+            outState.putInt(SELECTED_KEY, mPosition);
+        }
+
+        super.onSaveInstanceState(outState);
     }
 
     private boolean isNetworkAvailable() {
@@ -149,6 +172,9 @@ public class SpotifyStreamerFragment extends Fragment {
                 for(Artist artistsData : artistsDatas) {
                     artistAdapter.add(artistsData);
                 }
+
+                int checkPosition = artistList.getCheckedItemPosition();
+                artistList.setItemChecked(checkPosition, false);
             } else {
                 Toast.makeText(getActivity(), getResources().getString(R.string.no_search_artist),
                         Toast.LENGTH_SHORT).show();
