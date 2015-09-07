@@ -1,20 +1,20 @@
 package com.boram.android.spotifystreamer;
 
-import android.app.Activity;
 import android.app.Dialog;
-import android.app.ProgressDialog;
-import android.content.DialogInterface;
+import android.content.BroadcastReceiver;
+import android.content.ComponentName;
+import android.content.Context;
 import android.content.Intent;
-import android.media.AudioManager;
-import android.media.MediaPlayer;
-import android.os.AsyncTask;
+import android.content.IntentFilter;
+import android.content.ServiceConnection;
 import android.os.Handler;
+import android.os.IBinder;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.support.v4.app.DialogFragment;
 import android.os.Bundle;
+import android.support.v4.content.LocalBroadcastManager;
 import android.util.Log;
-import android.view.DragEvent;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -26,19 +26,17 @@ import android.widget.TextView;
 
 import com.squareup.picasso.Picasso;
 
-import java.io.IOException;
 import java.util.ArrayList;
-import java.util.concurrent.TimeUnit;
-
-import kaaes.spotify.webapi.android.models.Track;
 
 /**
  * A placeholder fragment containing a simple view.
  */
-public class TrackPlayerFragment extends DialogFragment implements MediaPlayer.OnCompletionListener {
+public class TrackPlayerFragment extends DialogFragment {
     private final String LOG_TAG = TrackPlayerFragment.class.getSimpleName();
 
-    MediaPlayer mediaPlayer;
+    private TrackPlayerService trackService;
+    private Intent playIntent;
+    private boolean musicBound = false;
 
     TextView artistName;
     TextView albumName;
@@ -49,28 +47,49 @@ public class TrackPlayerFragment extends DialogFragment implements MediaPlayer.O
 
     Button playBtn;
 
-    String trackUrl;
-
     public Handler durationHandler = new Handler();
     public int position;
+
+    @Override
+    public void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setRetainInstance(true);
+    }
 
     @Nullable
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
+        IntentFilter intentFilter = new IntentFilter();
+        intentFilter.addAction(SpotifyStreamerConst.SERVICE_BROADCAST_ACTION);
+        intentFilter.addAction(SpotifyStreamerConst.SERVICE_BROADCAST_ACTION_PLAY);
+        intentFilter.addAction(SpotifyStreamerConst.SERVICE_BROADCAST_ACTION_PREVIOUS);
+        intentFilter.addAction(SpotifyStreamerConst.SERVICE_BROADCAST_ACTION_NEXT);
+        intentFilter.addAction(SpotifyStreamerConst.SERVICE_BROADCAST_ACTION_PAUSE);
+
+        LocalBroadcastManager.getInstance(getActivity()).registerReceiver(updateMediaInfoReceiver,
+                intentFilter);
+
         View view = inflater.inflate(R.layout.track_player, container, false);
 
         Bundle arguments = getArguments();
         if(arguments != null) {
+            artistName = (TextView)view.findViewById(R.id.artist_name);
+            albumName = (TextView)view.findViewById(R.id.album_name);
+            albumImg = (ImageView)view.findViewById(R.id.album_img);
+            trackName = (TextView)view.findViewById(R.id.track_name);
+            trackSeekBar = (SeekBar)view.findViewById(R.id.track_duration);
+            trackDuration = (TextView)view.findViewById(R.id.start);
+
+            position = arguments.getInt(SpotifyStreamerConst.TRACK_POSITION);
+
             Button previousBtn = (Button)view.findViewById(R.id.previous);
             previousBtn.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
                     Log.d(LOG_TAG, "Previous Button Click");
-                    if(mediaPlayer.isPlaying()) {
-                        mediaPlayer.stop();
-                    }
 
-                    updateMediaInfo(position - 1);
+                    playPrev();
+                    updateMediaInfo();
                 }
             });
 
@@ -79,13 +98,14 @@ public class TrackPlayerFragment extends DialogFragment implements MediaPlayer.O
                 @Override
                 public void onClick(View v) {
                     Log.d(LOG_TAG, "Play Button Click");
-                    if(mediaPlayer.isPlaying()) {
+                    if(trackService.isPng()) {
+                        pausePlayer();
                         playBtn.setBackgroundResource(android.R.drawable.ic_media_play);
-                        mediaPlayer.pause();
                     } else {
+                        go();
                         playBtn.setBackgroundResource(android.R.drawable.ic_media_pause);
-                        mediaPlayer.start();
                     }
+
                 }
             });
 
@@ -94,33 +114,18 @@ public class TrackPlayerFragment extends DialogFragment implements MediaPlayer.O
                 @Override
                 public void onClick(View v) {
                     Log.d(LOG_TAG, "Next Button Click");
-                    if(mediaPlayer.isPlaying()) {
-                        mediaPlayer.stop();
-                    }
 
-                    updateMediaInfo(position + 1);
+                    playNext();
+                    updateMediaInfo();
                 }
             });
-
-            artistName = (TextView)view.findViewById(R.id.artist_name);
-            albumName = (TextView)view.findViewById(R.id.album_name);
-            albumImg = (ImageView)view.findViewById(R.id.album_img);
-            trackName = (TextView)view.findViewById(R.id.track_name);
-            trackSeekBar = (SeekBar)view.findViewById(R.id.track_duration);
-            trackDuration = (TextView)view.findViewById(R.id.end);
-
-            position = arguments.getInt(SpotifyStreamerConst.TRACK_POSITION);
-            updateMediaInfo(position);
 
             trackSeekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
                 @Override
                 public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                    Log.d(LOG_TAG, "Progress: " + progress);
-                    Log.d(LOG_TAG, "From User: " + fromUser);
-                    Log.d(LOG_TAG, "Media Duration: " + mediaPlayer.getDuration());
                     if (fromUser) {
                         seekBar.setProgress(progress);
-                        mediaPlayer.seekTo(progress);
+                        trackService.seek(progress);
                     }
                 }
 
@@ -139,79 +144,44 @@ public class TrackPlayerFragment extends DialogFragment implements MediaPlayer.O
         return view;
     }
 
-    public void updateMediaInfo(int position) {
-        Bundle arguments = getArguments();
+    private ServiceConnection trackConnection = new ServiceConnection() {
 
-        Log.d(LOG_TAG, "Position: " + position);
+        @Override
+        public void onServiceConnected(ComponentName name, IBinder service) {
+            TrackPlayerService.TrackBinder binder = (TrackPlayerService.TrackBinder)service;
+            trackService = binder.getService();
+            Log.d(LOG_TAG, "onServiceConnected");
+            if(!SpotifyStreamer.serviceState ||
+                    ((getArguments().getString(SpotifyStreamerConst.SERVICE_RESTART) != null) &&
+                            (getArguments().getInt(SpotifyStreamerConst.TRACK_POSITION) != trackService.getTrackPosition()))) {
+                getArguments().putString(SpotifyStreamerConst.SERVICE_RESTART, null);
+                SpotifyStreamer.serviceState = true;
+                ArrayList<TrackData> trackList = new ArrayList<TrackData>();
+                trackList = getArguments().getParcelableArrayList(SpotifyStreamerConst.TRACKS_DATA);
+                trackService.setTrackList(trackList);
+                trackService.setTrack(position);
+                trackService.playTrack();
+            }
 
-        ArrayList<TrackData> trackList = new ArrayList<TrackData>();
-        trackList = arguments.getParcelableArrayList(SpotifyStreamerConst.TRACKS_DATA);
+            musicBound = true;
 
-        if(position == -1) {
-            position = trackList.size() - 1;
-        } else if(position >= trackList.size()) {
-            position = 0;
+            updateMediaInfo();
         }
 
-        this.position = position;
-        TrackData track = trackList.get(position);
-
-        artistName.setText(track.getArtistName());
-        albumName.setText(track.getAlbumName());
-        Picasso.with(getActivity()).load(track.getAlbumImgUrl()).into(albumImg);
-        trackName.setText(track.getTrackName());
-
-        Log.d(LOG_TAG, "Artist Name: " + artistName.getText());
-        Log.d(LOG_TAG, "Album Name: " + albumName.getText());
-        Log.d(LOG_TAG, "Album Img: " + track.getAlbumImgUrl());
-        Log.d(LOG_TAG, "Track Name: " + trackName.getText());
-        Log.d(LOG_TAG, "Track Duration: " + trackDuration.getText());
-        Log.d(LOG_TAG, "Track URL: " + track.getTrackUrl());
-
-        trackUrl = track.getTrackUrl();
-
-        try {
-            mediaPlayer = new MediaPlayer();
-            mediaPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);
-            mediaPlayer.setOnCompletionListener(TrackPlayerFragment.this);
-            mediaPlayer.setDataSource(trackUrl);
-            mediaPlayer.prepare();
-
-            playBtn.setBackgroundResource(android.R.drawable.ic_media_pause);
-            mediaPlayer.start();
-
-            trackSeekBar.setMax((int) mediaPlayer.getDuration());
-            long seconds = TimeUnit.MILLISECONDS.toSeconds(mediaPlayer.getDuration());
-            trackDuration.setText(
-                    String.format("%d:%d", seconds / 60,
-                            seconds % 60)
-            );
-
-            trackSeekBar.setProgress(mediaPlayer.getCurrentPosition());
-            durationHandler.postDelayed(updateSeekBar, 100);
-//            mediaPlayer.setOnPreparedListener(new MediaPlayer.OnPreparedListener() {
-//                @Override
-//                public void onPrepared(MediaPlayer mediaPlayer) {
-//                    playBtn.setBackgroundResource(android.R.drawable.ic_media_pause);
-//                    mediaPlayer.start();
-//
-//                    trackSeekBar.setMax((int) mediaPlayer.getDuration());
-//                    long seconds = TimeUnit.MILLISECONDS.toSeconds(mediaPlayer.getDuration());
-//                    trackDuration.setText(
-//                            String.format("%d:%d", seconds / 60,
-//                                    seconds % 60)
-//                    );
-//
-//                    trackSeekBar.setProgress(mediaPlayer.getCurrentPosition());
-//                    durationHandler.postDelayed(updateSeekBar, 100);
-//                }
-//            });
-//            mediaPlayer.prepareAsync();
-        } catch (IOException e) {
-            e.printStackTrace();
+        @Override
+        public void onServiceDisconnected(ComponentName name) {
+            musicBound = false;
         }
-//        TrackPlayTask task = new TrackPlayTask();
-//        task.execute();
+    };
+
+    public void updateMediaInfo() {
+        artistName.setText(trackService.getArtistName());
+        albumName.setText(trackService.getAlbumName());
+        Picasso.with(getActivity()).load(trackService.getAlbumImgUrl()).into(albumImg);
+        trackName.setText(trackService.getTrackName());
+        trackSeekBar.setMax(30000);
+        trackSeekBar.setProgress(trackService.getPosn());
+        durationHandler.postDelayed(updateSeekBar, 1000);
     }
 
     @NonNull
@@ -222,74 +192,91 @@ public class TrackPlayerFragment extends DialogFragment implements MediaPlayer.O
         return dialog;
     }
 
+    private BroadcastReceiver updateMediaInfoReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if(intent.getAction().equals(SpotifyStreamerConst.SERVICE_BROADCAST_ACTION)) {
+                updateMediaInfo();
+            } else if(intent.getAction().equals(SpotifyStreamerConst.SERVICE_BROADCAST_ACTION_PLAY)) {
+                updateMediaInfo();
+                playBtn.setBackgroundResource(android.R.drawable.ic_media_pause);
+            } else if(intent.getAction().equals(SpotifyStreamerConst.SERVICE_BROADCAST_ACTION_PREVIOUS)) {
+                updateMediaInfo();
+                playBtn.setBackgroundResource(android.R.drawable.ic_media_pause);
+            } else if(intent.getAction().equals(SpotifyStreamerConst.SERVICE_BROADCAST_ACTION_NEXT)) {
+                updateMediaInfo();
+                playBtn.setBackgroundResource(android.R.drawable.ic_media_pause);
+            } else if(intent.getAction().equals(SpotifyStreamerConst.SERVICE_BROADCAST_ACTION_PAUSE)) {
+                updateMediaInfo();
+                playBtn.setBackgroundResource(android.R.drawable.ic_media_play);
+            }
+        }
+    };
+
+    @Override
+    public void onResume() {
+        super.onResume();
+
+        if(!Utils.isServiceRunning(getActivity(), TrackPlayerService.class)) {
+            SpotifyStreamer.serviceState = false;
+            playIntent = new Intent(getActivity(), TrackPlayerService.class);
+            getActivity().bindService(playIntent, trackConnection, Context.BIND_AUTO_CREATE);
+            getActivity().startService(playIntent);
+        } else {
+            playIntent = new Intent(getActivity(), TrackPlayerService.class);
+            getActivity().bindService(playIntent, trackConnection, Context.BIND_AUTO_CREATE);
+        }
+
+        IntentFilter intentFilter = new IntentFilter();
+        intentFilter.addAction(SpotifyStreamerConst.SERVICE_BROADCAST_ACTION);
+        intentFilter.addAction(SpotifyStreamerConst.SERVICE_BROADCAST_ACTION_PLAY);
+        intentFilter.addAction(SpotifyStreamerConst.SERVICE_BROADCAST_ACTION_PREVIOUS);
+        intentFilter.addAction(SpotifyStreamerConst.SERVICE_BROADCAST_ACTION_NEXT);
+        intentFilter.addAction(SpotifyStreamerConst.SERVICE_BROADCAST_ACTION_PAUSE);
+
+        LocalBroadcastManager.getInstance(getActivity()).registerReceiver(updateMediaInfoReceiver,
+                intentFilter);
+
+        if(trackService != null) {
+            updateMediaInfo();
+        }
+    }
+
     @Override
     public void onStop() {
         super.onStop();
         Log.d(LOG_TAG, "onStop");
-        if(mediaPlayer != null) {
-            mediaPlayer.release();
-            mediaPlayer = null;
-        }
 
+        getActivity().unbindService(trackConnection);
+
+        LocalBroadcastManager.getInstance(getActivity()).unregisterReceiver(updateMediaInfoReceiver);
         durationHandler.removeCallbacks(updateSeekBar);
-    }
-
-    @Override
-    public void onCompletion(MediaPlayer mp) {
-        updateMediaInfo(position + 1);
     }
 
     public Runnable updateSeekBar = new Runnable() {
         @Override
         public void run() {
-            trackSeekBar.setProgress(mediaPlayer.getCurrentPosition());
+            trackSeekBar.setProgress(trackService.getPosn());
+            trackDuration.setText(android.text.format.DateFormat.format("m:ss", trackService.getPosn()));
             durationHandler.postDelayed(this, 1000);
         }
     };
 
-//    public class TrackPlayTask extends AsyncTask<Void, Void, Void> {
-//        private ProgressDialog progressDialog;
-//
-//        @Override
-//        protected void onPreExecute() {
-//            mediaPlayer = new MediaPlayer();
-//            mediaPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);
-//            mediaPlayer.setOnCompletionListener(TrackPlayerFragment.this);
-//
-//            progressDialog = new ProgressDialog(getActivity());
-//            progressDialog.setProgressStyle(ProgressDialog.STYLE_SPINNER);
-//            progressDialog.setMessage("Loading...");
-//            progressDialog.show();
-//
-//            super.onPreExecute();
-//        }
-//
-//        @Override
-//        protected Void doInBackground(Void... params) {
-//            try {
-//                mediaPlayer.setDataSource(trackUrl);
-//                mediaPlayer.setOnPreparedListener(new MediaPlayer.OnPreparedListener() {
-//                    @Override
-//                    public void onPrepared(MediaPlayer mediaPlayer) {
-//                        playBtn.setBackgroundResource(android.R.drawable.ic_media_pause);
-//                        mediaPlayer.start();
-//                        trackSeekBar.setProgress(mediaPlayer.getCurrentPosition());
-//                        durationHandler.postDelayed(updateSeekBar, 100);
-//                    }
-//                });
-//                mediaPlayer.prepareAsync();
-//            } catch (IOException e) {
-//                e.printStackTrace();
-//            }
-//            return null;
-//        }
-//
-//        @Override
-//        protected void onPostExecute(Void aVoid) {
-//            super.onPostExecute(aVoid);
-//            if(progressDialog != null) {
-//                progressDialog.dismiss();
-//            }
-//        }
-//    }
+    private void playNext() {
+        trackService.playNext();
+        playBtn.setBackgroundResource(android.R.drawable.ic_media_pause);
+    }
+
+    private void playPrev() {
+        trackService.playPrev();
+        playBtn.setBackgroundResource(android.R.drawable.ic_media_pause);
+    }
+
+    private void pausePlayer() {
+        trackService.pausePlayer();
+    }
+
+    private void go() {
+        trackService.go();
+    }
 }

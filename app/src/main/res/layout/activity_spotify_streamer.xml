@@ -1,7 +1,7 @@
-<fragment xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/spotify_streamer_fragment"
     android:name="com.boram.android.spotifystreamer.SpotifyStreamerFragment"
-    tools:layout="@layout/fragment_spotify_streamer"
+    tools:layout="@layout/activity_spotify_streamer"
     android:layout_width="match_parent"
     android:layout_height="match_parent" />

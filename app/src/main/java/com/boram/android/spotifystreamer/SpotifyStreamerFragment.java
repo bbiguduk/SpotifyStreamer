@@ -2,23 +2,26 @@ package com.boram.android.spotifystreamer;
 
 import android.app.ProgressDialog;
 import android.content.Context;
-import android.content.Intent;
+import android.content.SharedPreferences;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.os.AsyncTask;
+import android.preference.PreferenceManager;
 import android.support.v4.app.Fragment;
 import android.os.Bundle;
 import android.support.v7.widget.SearchView;
-import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.AdapterView;
 import android.widget.ListView;
 import android.widget.Toast;
 
 import java.util.ArrayList;
+import java.util.Hashtable;
 import java.util.List;
+import java.util.Map;
 
 import kaaes.spotify.webapi.android.SpotifyApi;
 import kaaes.spotify.webapi.android.SpotifyService;
@@ -50,6 +53,13 @@ public class SpotifyStreamerFragment extends Fragment {
     }
 
     @Override
+    public void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setHasOptionsMenu(true);
+        setRetainInstance(true);
+    }
+
+    @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
         View rootView = inflater.inflate(R.layout.fragment_spotify_streamer, container, false);
@@ -59,13 +69,11 @@ public class SpotifyStreamerFragment extends Fragment {
                 new ArtistAdapter(
                         getActivity(),
                         R.layout.artist_list_item,
-//                        new ArrayList<ArtistsData>());
                         new ArrayList<Artist>());
         artistList.setAdapter(artistAdapter);
         artistList.setOnItemClickListener(new AdapterView.OnItemClickListener() {
             @Override
             public void onItemClick(AdapterView<?> adapterView, View view, int i, long l) {
-//                ArtistsData artistsData = artistAdapter.getItem(i);
                 Artist artistsData = artistAdapter.getItem(i);
                 ((Callback)getActivity())
                         .onItemSelected(artistsData);
@@ -91,6 +99,8 @@ public class SpotifyStreamerFragment extends Fragment {
                 } else {
                     Toast.makeText(getActivity(), getString(R.string.connection_error), Toast.LENGTH_SHORT).show();
                 }
+
+                searchArea.clearFocus();
                 return false;
             }
 
@@ -143,13 +153,19 @@ public class SpotifyStreamerFragment extends Fragment {
                 return null;
             }
 
+            SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getActivity());
+            String countryCode = prefs.getString(getString(R.string.pref_country_key),
+                    getString(R.string.pref_country_default));
+
             SpotifyApi api = new SpotifyApi();
             SpotifyService spotify = api.getService();
 
             List<Artist> artistList = new ArrayList<Artist>();
 
+            Map<String, Object> options = new Hashtable<String, Object>();
+            options.put("country", countryCode);
             try {
-                ArtistsPager searchResults = spotify.searchArtists(strings[0]);
+                ArtistsPager searchResults = spotify.searchArtists(strings[0], options);
                 Pager<Artist> artists = searchResults.artists;
                 artistList = artists.items;
             } catch(RetrofitError ex) {

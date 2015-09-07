@@ -1,15 +1,10 @@
 package com.boram.android.spotifystreamer;
 
-import android.annotation.TargetApi;
-import android.app.ActionBar;
 import android.app.ProgressDialog;
-import android.content.Context;
 import android.content.Intent;
-import android.net.ConnectivityManager;
-import android.net.NetworkInfo;
-import android.net.Uri;
+import android.content.SharedPreferences;
 import android.os.AsyncTask;
-import android.os.Build;
+import android.preference.PreferenceManager;
 import android.support.v4.app.Fragment;
 import android.os.Bundle;
 import android.util.Log;
@@ -17,20 +12,9 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.AdapterView;
-import android.widget.ArrayAdapter;
 import android.widget.ListView;
 import android.widget.Toast;
 
-import org.json.JSONArray;
-import org.json.JSONException;
-import org.json.JSONObject;
-
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
-import java.net.URL;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -56,7 +40,6 @@ public class Top10_TracksFragment extends Fragment {
     private String artistName;
 
     public interface Callback {
-//        public void onItemSelected(Track data);
         public void onItemSelected(int position, AlbumAdapter trackData);
     }
 
@@ -68,6 +51,12 @@ public class Top10_TracksFragment extends Fragment {
         Log.v(LOG_TAG, "Artist : " + artistName);
         FetchTop10TracksTask fetchTop10TracksTask = new FetchTop10TracksTask();
         fetchTop10TracksTask.execute(artistId);
+    }
+
+    @Override
+    public void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setRetainInstance(true);
     }
 
     @Override
@@ -92,13 +81,6 @@ public class Top10_TracksFragment extends Fragment {
             top10TracksList.setOnItemClickListener(new AdapterView.OnItemClickListener() {
                 @Override
                 public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
-                    Track track = mAlbumAdapter.getItem(position);
-//                    Log.d(LOG_TAG, "Artist Name : " + artistName);
-//                    Log.d(LOG_TAG, "Album Name : " + track.album.name);
-//                    Log.d(LOG_TAG, "Album Image : " + track.album.images.get(0).url);
-//                    Log.d(LOG_TAG, "Track Name : " + track.name);
-//                    Log.d(LOG_TAG, "Track Duration : " + track.duration_ms);
-
                     ((Callback)getActivity())
                             .onItemSelected(position, mAlbumAdapter);
                 }
@@ -128,13 +110,17 @@ public class Top10_TracksFragment extends Fragment {
                 return null;
             }
 
+            SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getActivity());
+            String countryCode = prefs.getString(getString(R.string.pref_country_key),
+                    getString(R.string.pref_country_default));
+
             List<Track> trackList;
 
             SpotifyApi api = new SpotifyApi();
             SpotifyService spotify = api.getService();
 
             Map<String, Object> query = new HashMap<String, Object>();
-            query.put("country", "US");
+            query.put("country", countryCode);
             try {
                 Tracks tracksResult = spotify.getArtistTopTrack(strings[0], query);
                 trackList = tracksResult.tracks;
@@ -151,7 +137,7 @@ public class Top10_TracksFragment extends Fragment {
         protected void onPostExecute(List<Track> albumDatas) {
             mDialog.dismiss();
 
-            if(albumDatas != null) {
+            if(albumDatas.size() != 0) {
                 mAlbumAdapter.clear();
                 for(Track albumData : albumDatas) {
                     mAlbumAdapter.add(albumData);

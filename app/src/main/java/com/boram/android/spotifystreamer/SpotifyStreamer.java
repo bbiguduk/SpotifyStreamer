@@ -1,8 +1,10 @@
 package com.boram.android.spotifystreamer;
 
+import android.content.ComponentName;
+import android.content.Context;
 import android.content.Intent;
-import android.media.MediaPlayer;
-import android.support.v4.app.DialogFragment;
+import android.content.ServiceConnection;
+import android.os.IBinder;
 import android.support.v4.app.FragmentManager;
 import android.support.v4.app.FragmentTransaction;
 import android.support.v7.app.ActionBarActivity;
@@ -10,13 +12,11 @@ import android.os.Bundle;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.widget.Toast;
 
 import java.util.ArrayList;
-import java.util.List;
 
 import kaaes.spotify.webapi.android.models.Artist;
-import kaaes.spotify.webapi.android.models.ArtistSimple;
-import kaaes.spotify.webapi.android.models.Image;
 import kaaes.spotify.webapi.android.models.Track;
 
 
@@ -25,12 +25,43 @@ public class SpotifyStreamer extends ActionBarActivity implements SpotifyStreame
     private final String LOG_TAG = SpotifyStreamer.class.getSimpleName();
     private static final String TOP10FRAGMENT_TAG = "TFTAG";
 
-    private boolean mTwoPane;
+    private TrackPlayerService trackService;
+    private boolean musicBound = false;
+
+    public static boolean mTwoPane;
+    public static boolean serviceState;
+
+    Menu menu;
+
+    private ArrayList<TrackData> trackList;
+
+//    private ServiceConnection serviceConnection = new ServiceConnection() {
+//
+//        @Override
+//        public void onServiceConnected(ComponentName name, IBinder service) {
+//            TrackPlayerService.TrackBinder binder = (TrackPlayerService.TrackBinder)service;
+//            trackService = binder.getService();
+//            Log.d(LOG_TAG, "trackService: " + trackService.getTrackPosition());
+//            Log.d(LOG_TAG, "Binder: " + binder.getService().getTrackPosition());
+//            musicBound = true;
+//        }
+//
+//        @Override
+//        public void onServiceDisconnected(ComponentName name) {
+//            Log.d(LOG_TAG, "onServiceDisconnected");
+//            trackService = null;
+//            musicBound = false;
+//        }
+//    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_spotify_streamer);
+        SpotifyStreamerFragment spotifyStreamerFragment = new SpotifyStreamerFragment();
+        getSupportFragmentManager().beginTransaction()
+                .add(R.id.spotify_streamer_fragment, spotifyStreamerFragment)
+                .commit();
 
         if(findViewById(R.id.top10_tracks_container) != null) {
             mTwoPane = true;
@@ -43,26 +74,98 @@ public class SpotifyStreamer extends ActionBarActivity implements SpotifyStreame
         } else {
             mTwoPane = false;
         }
+
+        if(getIntent().getStringExtra(SpotifyStreamerConst.START_FROM_TOP10) != null) {
+            Log.d(LOG_TAG, "onCreate: get Bundle");
+            showPlayerDialog(getIntent().getExtras());
+        }
+
+        if(getIntent().getStringExtra(SpotifyStreamerConst.START_FROM_NOTIFICATION) != null) {
+            Log.d(LOG_TAG, "onCreate: get ParcelableArrayList");
+            Bundle bundle = new Bundle();
+            bundle.putInt(SpotifyStreamerConst.TRACK_POSITION,
+                    getIntent().getIntExtra(SpotifyStreamerConst.TRACK_POSITION,
+                            SpotifyStreamerConst.INVALID_TRACK_POSITION));
+            bundle.putParcelableArrayList(SpotifyStreamerConst.TRACKS_DATA,
+                    getIntent().getParcelableArrayListExtra(SpotifyStreamerConst.TRACKS_DATA));
+
+            showPlayerDialog(bundle);
+        }
+    }
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        // Inflate the menu; this adds items to the action bar if it is present.
+        getMenuInflater().inflate(R.menu.menu_spotify_streamer, menu);
+        this.menu = menu;
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        // Handle action bar item clicks here. The action bar will
+        // automatically handle clicks on the Home/Up button, so long
+        // as you specify a parent activity in AndroidManifest.xml.
+        int id = item.getItemId();
+
+        //noinspection SimplifiableIfStatement
+        switch(id) {
+            case R.id.action_settings:
+                startActivity(new Intent(this, SettingsActivity.class));
+                return true;
+//            case R.id.action_now_playing:
+//                if(Utils.isServiceRunning(this, TrackPlayerService.class)) {
+//                    Intent serviceIntent = new Intent(this, TrackPlayerService.class);
+//                    getApplicationContext().bindService(serviceIntent, serviceConnection, Context.BIND_AUTO_CREATE);
+//
+//                    if(trackService == null) {
+//                        Log.d(LOG_TAG, "Service is null");
+//                    }
+//
+//                    Bundle args = new Bundle();
+//                    args.putInt(SpotifyStreamerConst.TRACK_POSITION, trackService.getTrackPosition());
+//                    args.putParcelableArrayList(SpotifyStreamerConst.TRACKS_DATA, trackService.getTracksData());
+//
+//                    showPlayerDialog(args);
+//
+//                    unbindService(serviceConnection);
+//                } else {
+//                    Toast.makeText(this, R.string.no_media_player, Toast.LENGTH_SHORT).show();
+//                }
+//                return true;
+            default:
+                return super.onOptionsItemSelected(item);
+        }
     }
 
     @Override
     public void onItemSelected(Artist data) {
-        if(mTwoPane) {
-            Bundle args = new Bundle();
-            args.putString(SpotifyStreamerConst.ARTIST_ID, data.id);
-            args.putString(SpotifyStreamerConst.ARTIST_NAME, data.name);
+        Bundle args = new Bundle();
+        args.putString(SpotifyStreamerConst.ARTIST_ID, data.id);
+        args.putString(SpotifyStreamerConst.ARTIST_NAME, data.name);
 
-            Top10_TracksFragment fragment = new Top10_TracksFragment();
-            fragment.setArguments(args);
+        Top10_TracksFragment fragment = new Top10_TracksFragment();
+        fragment.setArguments(args);
+
+        if(mTwoPane) {
+            getSupportActionBar().setSubtitle(data.name);
 
             getSupportFragmentManager().beginTransaction()
                     .replace(R.id.top10_tracks_container, fragment, TOP10FRAGMENT_TAG)
+                    .addToBackStack(null)
                     .commit();
         } else {
-            Intent intent = new Intent(this, Top10_Tracks.class)
-                    .putExtra(SpotifyStreamerConst.ARTIST_ID, data.id)
-                    .putExtra(SpotifyStreamerConst.ARTIST_NAME, data.name);
-            startActivity(intent);
+            getSupportActionBar().setSubtitle(data.name);
+
+            getSupportFragmentManager().beginTransaction()
+                    .replace(R.id.spotify_streamer_fragment, fragment)
+                    .addToBackStack(null)
+                    .commit();
+
+//            Intent intent = new Intent(this, Top10_Tracks.class)
+//                    .putExtra(SpotifyStreamerConst.ARTIST_ID, data.id)
+//                    .putExtra(SpotifyStreamerConst.ARTIST_NAME, data.name);
+//            startActivity(intent);
         }
     }
 
@@ -75,47 +178,21 @@ public class SpotifyStreamer extends ActionBarActivity implements SpotifyStreame
         }
     }
 
-//    @Override
-//    public void onItemSelected(Track data) {
-//        if(mTwoPane) {
-//            Bundle args = new Bundle();
-//
-//            List<ArtistSimple> artistName = data.artists;
-//            String[] artistArray = new String[artistName.size()];
-//
-//            for(int i = 0; i < artistName.size(); i++) {
-//                Log.i("Top10_Tracks", "Artist : " + artistName.get(i).name);
-//                artistArray[i] = artistName.get(i).name;
-//            }
-//
-//            List<Image> albumImg = data.album.images;
-//            String imgUrl = "";
-//            if(albumImg.size() != 0) {
-//                imgUrl = data.album.images.get(0).url;
-//            }
-//
-//            String albumName = data.album.name;
-//            String trackName = data.name;
-//            long duration = data.duration_ms;
-//
-//            args.putStringArray(SpotifyStreamerConst.ARTIST_NAME, artistArray);
-//            args.putString(SpotifyStreamerConst.ALBUM_NAME, albumName);
-//            args.putString(SpotifyStreamerConst.ALBUM_IMAGE, imgUrl);
-//            args.putString(SpotifyStreamerConst.TRACK_NAME, trackName);
-//            args.putLong(SpotifyStreamerConst.DURATION, duration);
-//
-//            args.putString(SpotifyStreamerConst.Track_URL, data.preview_url);
-//
-//            showPlayerDialog(args);
-//        }
-//    }
-
     public void showPlayerDialog(Bundle args) {
         FragmentManager fragmentManager = getSupportFragmentManager();
         TrackPlayerFragment dialogFragment = new TrackPlayerFragment();
 
         dialogFragment.setArguments(args);
-        dialogFragment.show(fragmentManager, "dialog");
+
+        if(mTwoPane) {
+            dialogFragment.show(fragmentManager, "dialog");
+        } else {
+            FragmentTransaction transaction = fragmentManager.beginTransaction();
+            transaction.setTransition(FragmentTransaction.TRANSIT_FRAGMENT_OPEN);
+            transaction.replace(R.id.spotify_streamer_fragment, dialogFragment)
+                    .addToBackStack(null)
+                    .commit();
+        }
     }
 
     @Override
@@ -124,14 +201,15 @@ public class SpotifyStreamer extends ActionBarActivity implements SpotifyStreame
 
         args.putInt(SpotifyStreamerConst.TRACK_POSITION, position);
 
-        ArrayList<TrackData> trackList = new ArrayList<TrackData>();
+        trackList = new ArrayList<TrackData>();
         for(int i = 0; i < trackData.getCount(); i++) {
-            Track track = trackData.getItem(position);
+            Track track = trackData.getItem(i);
 
             trackList.add(new TrackData(track));
         }
 
         args.putParcelableArrayList(SpotifyStreamerConst.TRACKS_DATA, trackList);
+        args.putString(SpotifyStreamerConst.SERVICE_RESTART, "restart");
 
         showPlayerDialog(args);
     }

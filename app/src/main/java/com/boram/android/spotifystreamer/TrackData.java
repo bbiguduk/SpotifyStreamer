@@ -12,12 +12,12 @@ import kaaes.spotify.webapi.android.models.Track;
  * Created by P16640 on 2015-08-13.
  */
 public class TrackData implements Parcelable {
-    String artistName;
-    String albumName;
-    String albumImgUrl;
-    String trackName;
-    long duration;
-    String trackUrl;
+    private String artistName;
+    private String albumName;
+    private String albumImgUrl;
+    private String trackName;
+    private long duration;
+    private String trackUrl;
 
     public TrackData(Track track) {
         List<ArtistSimple> artistList = track.artists;

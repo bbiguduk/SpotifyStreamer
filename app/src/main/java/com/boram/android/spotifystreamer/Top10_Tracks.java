@@ -24,10 +24,28 @@ import kaaes.spotify.webapi.android.models.Track;
 public class Top10_Tracks extends ActionBarActivity implements Top10_TracksFragment.Callback {
     private final String LOG_TAG = Top10_Tracks.class.getSimpleName();
 
+    private ArrayList<TrackData> trackList;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_top10_tracks);
+
+        getSupportActionBar().setSubtitle(getIntent().getStringExtra(SpotifyStreamerConst.ARTIST_NAME));
+
+        getSupportFragmentManager().addOnBackStackChangedListener(new FragmentManager.OnBackStackChangedListener() {
+            @Override
+            public void onBackStackChanged() {
+                int stackHeight = getSupportFragmentManager().getBackStackEntryCount();
+                if (stackHeight > 0) {
+                    getSupportActionBar().setHomeButtonEnabled(true);
+                    getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+                } else {
+                    getSupportActionBar().setHomeButtonEnabled(false);
+                    getSupportActionBar().setDisplayHomeAsUpEnabled(false);
+                }
+            }
+        });
 
         if(savedInstanceState == null) {
             Bundle arguments = new Bundle();
@@ -43,14 +61,6 @@ public class Top10_Tracks extends ActionBarActivity implements Top10_TracksFragm
         }
     }
 
-
-    @Override
-    public boolean onCreateOptionsMenu(Menu menu) {
-        // Inflate the menu; this adds items to the action bar if it is present.
-        getMenuInflater().inflate(R.menu.menu_top10_tracks, menu);
-        return true;
-    }
-
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         // Handle action bar item clicks here. The action bar will
@@ -59,47 +69,17 @@ public class Top10_Tracks extends ActionBarActivity implements Top10_TracksFragm
         int id = item.getItemId();
 
         //noinspection SimplifiableIfStatement
-        if (id == R.id.action_settings) {
-            return true;
-        }
+        switch(id) {
+            case android.R.id.home:
+                FragmentManager fm = getSupportFragmentManager();
+                fm.popBackStack();
 
-        return super.onOptionsItemSelected(item);
+                return true;
+
+            default:
+                return super.onOptionsItemSelected(item);
+        }
     }
-
-    /*@Override
-    public void onItemSelected(Track data) {
-        Bundle args = new Bundle();
-
-        List<ArtistSimple> artistName = data.artists;
-        String[] artistArray = new String[artistName.size()];
-
-        for(int i = 0; i < artistName.size(); i++) {
-            Log.i("Top10_Tracks", "Artist : " + artistName.get(i).name);
-            artistArray[i] = artistName.get(i).name;
-        }
-
-        List<Image> albumImg = data.album.images;
-        String imgUrl = "";
-        if(albumImg.size() != 0) {
-            imgUrl = data.album.images.get(0).url;
-        }
-
-        String albumName = data.album.name;
-        String trackName = data.name;
-        long duration = data.duration_ms;
-
-        Log.d(LOG_TAG, data.preview_url);
-
-        args.putStringArray(SpotifyStreamerConst.ARTIST_NAME, artistArray);
-        args.putString(SpotifyStreamerConst.ALBUM_NAME, albumName);
-        args.putString(SpotifyStreamerConst.ALBUM_IMAGE, imgUrl);
-        args.putString(SpotifyStreamerConst.TRACK_NAME, trackName);
-        args.putLong(SpotifyStreamerConst.DURATION, duration);
-
-        args.putString(SpotifyStreamerConst.Track_URL, data.preview_url);
-
-        showPlayerDialog(args);
-    }*/
 
     @Override
     public void onItemSelected(int position, AlbumAdapter trackData) {
@@ -107,7 +87,7 @@ public class Top10_Tracks extends ActionBarActivity implements Top10_TracksFragm
 
         args.putInt(SpotifyStreamerConst.TRACK_POSITION, position);
 
-        ArrayList<TrackData> trackList = new ArrayList<TrackData>();
+        trackList = new ArrayList<TrackData>();
         for(int i = 0; i < trackData.getCount(); i++) {
             Track track = trackData.getItem(i);
 
@@ -116,18 +96,9 @@ public class Top10_Tracks extends ActionBarActivity implements Top10_TracksFragm
 
         args.putParcelableArrayList(SpotifyStreamerConst.TRACKS_DATA, trackList);
 
-        showPlayerDialog(args);
-    }
-
-    public void showPlayerDialog(Bundle args) {
-        FragmentManager fragmentManager = getSupportFragmentManager();
-        TrackPlayerFragment dialogFragment = new TrackPlayerFragment();
-
-        dialogFragment.setArguments(args);
-
-        FragmentTransaction transaction = fragmentManager.beginTransaction();
-        transaction.setTransition(FragmentTransaction.TRANSIT_FRAGMENT_OPEN);
-        transaction.replace(R.id.top10_tracks_container, dialogFragment)
-                .addToBackStack(null).commit();
+        Intent intent = new Intent(this, SpotifyStreamer.class);
+        intent.putExtra(SpotifyStreamerConst.START_FROM_TOP10, "fromtop10");
+        intent.putExtras(args);
+        startActivity(intent);
     }
 }
