@@ -91,7 +91,7 @@ public class SpotifyStreamerFragment extends Fragment {
             public boolean onQueryTextSubmit(String query) {
                 String searchKeyword = searchArea.getQuery().toString();
 
-                if(isNetworkAvailable()) {
+                if(Utils.isNetworkAvailable(getActivity())) {
                     ((Callback)getActivity())
                             .onSearchClicked(searchKeyword);
                     FetchArtistTask fetchArtistTask = new FetchArtistTask();
@@ -124,13 +124,6 @@ public class SpotifyStreamerFragment extends Fragment {
         }
 
         super.onSaveInstanceState(outState);
-    }
-
-    private boolean isNetworkAvailable() {
-        ConnectivityManager connectivityManager =
-                (ConnectivityManager)getActivity().getSystemService(Context.CONNECTIVITY_SERVICE);
-        NetworkInfo activeNetworkInfo = connectivityManager.getActiveNetworkInfo();
-        return activeNetworkInfo != null && activeNetworkInfo.isConnected();
     }
 
     public class FetchArtistTask extends AsyncTask<String, Void, List<Artist>> {

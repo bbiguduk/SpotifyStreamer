@@ -257,10 +257,23 @@ public class TrackPlayerFragment extends DialogFragment {
         @Override
         public void run() {
             trackSeekBar.setProgress(trackService.getPosn());
-            trackDuration.setText(android.text.format.DateFormat.format("m:ss", trackService.getPosn()));
+            trackDuration.setText(formatDuration(trackService.getPosn()));
             durationHandler.postDelayed(this, 1000);
         }
     };
+
+    private String formatDuration(long duration) {
+        String durationStr;
+
+        int milliseconds = (int)duration % 60;
+        int seconds = (int) (duration / 1000) % 60;
+        int minutes = (int) ((duration / (1000 * 60)) % 60);
+        int hours = (int) ((duration / (1000 * 60 * 60)) % 24);
+
+        durationStr = String.format(getActivity().getString(R.string.format_duration), minutes, seconds);
+
+        return durationStr;
+    }
 
     private void playNext() {
         trackService.playNext();

@@ -49,8 +49,12 @@ public class Top10_TracksFragment extends Fragment {
 
     private void updateTop10Tracks() {
         Log.v(LOG_TAG, "Artist : " + artistName);
-        FetchTop10TracksTask fetchTop10TracksTask = new FetchTop10TracksTask();
-        fetchTop10TracksTask.execute(artistId);
+        if(Utils.isNetworkAvailable(getActivity())) {
+            FetchTop10TracksTask fetchTop10TracksTask = new FetchTop10TracksTask();
+            fetchTop10TracksTask.execute(artistId);
+        } else {
+            Toast.makeText(getActivity(), getString(R.string.connection_error), Toast.LENGTH_SHORT).show();
+        }
     }
 
     @Override
